@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FUI</title>
+  <style>
+    :root{color-scheme: dark}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      overflow:hidden;
+      background:#020617;
+      font-family:system-ui,Segoe UI,Roboto,Arial;
+      color:#fff;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+    canvas{
+      display:block;
+      position:fixed;
+      inset:0;
+    }
+    .edge-panel{pointer-events:none}
+  </style>
+</head>
+<body>
+  <canvas id="fuiCanvas"></canvas>
+
+  <script>
+  (function(){
+    const canvas = document.getElementById('fuiCanvas');
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+    let bars = [], particles = [], beams = [];
+    // random blueprint graph
+    let blueprintNodes = [], blueprintEdges = [];
+
+    const palette = {
+      cyan: 'rgba(56,189,248,',
+      mint: 'rgba(94,234,212,',
+      amber: 'rgba(251,191,36,',
+      deep: '#071022'
+    };
+
+    function resize(){
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      W = Math.max(800, window.innerWidth);
+      H = Math.max(600, window.innerHeight);
+      canvas.width = Math.floor(W * DPR);
+      canvas.height = Math.floor(H * DPR);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.scale(DPR, DPR);
+      initLayout();
+    }
+
+    // config
+    let cfg = {
+      columns: Math.max(36, Math.floor(W / 16)),
+      leftPad: 64,
+      rightPad: 64,
+      bottomPad: 110,
+      topPad: 80
+    };
+
+    function initLayout(){
+      cfg.columns = Math.max(28, Math.floor(W / 16));
+      cfg.leftPad = Math.round(Math.max(48, W * 0.07));
+      cfg.rightPad = cfg.leftPad;
+      cfg.topPad = Math.round(Math.max(60, H * 0.06));
+      cfg.bottomPad = Math.round(Math.max(90, H * 0.09));
+
+      // bars
+      const usableW = W - cfg.leftPad - cfg.rightPad;
+      const colW = usableW / cfg.columns;
+      bars = [];
+      for(let i=0;i<cfg.columns;i++){
+        bars.push({
+          i,
+          x: cfg.leftPad + i * colW + colW*0.5,
+          w: Math.max(4, colW*0.6),
+          target: 0,
+          value: 0,
+          phase: Math.random()*Math.PI*2,
+          speed: 0.06 + Math.random()*0.18,
+          hue: (i / cfg.columns)
+        });
+      }
+
+      // particles
+      particles = [];
+      for(let i=0;i<Math.max(18, Math.floor(W/140)); i++){
+        particles.push({
+          x: Math.random()*W,
+          y: Math.random()*H,
+          r: 1 + Math.random()*2.6,
+          vx: (Math.random()-0.5)*0.4,
+          vy: (Math.random()-0.5)*0.12,
+          tOffset: Math.random()*10
+        });
+      }
+
+      // beams между барами
+      beams = [];
+      for(let i=0;i<Math.floor(cfg.columns/8);i++){
+        const a = Math.floor(Math.random()*cfg.columns);
+        const b = Math.min(cfg.columns-1, Math.floor(a + (Math.random()*6-3)));
+        beams.push({a,b,phase:Math.random(),speed:0.02 + Math.random()*0.06});
+      }
+
+      // асимметричный random abstract wireframe / blueprint
+      initBlueprint();
+    }
+
+    // helpers
+    const TAU = Math.PI*2;
+    function lerp(a,b,t){return a + (b - a) * t}
+    function clamp(v,mn,mx){return Math.max(mn, Math.min(mx, v));}
+
+    // генерация рандомного blueprint-графа
+    function initBlueprint(){
+      blueprintNodes = [];
+      blueprintEdges = [];
+
+      // четыре асимметричных регионах, где «живёт» чертёж
+      const regions = [
+        { xRange:[0.08,0.32], yRange:[0.14,0.34] }, // upper-left
+        { xRange:[0.66,0.94], yRange:[0.14,0.40] }, // mid-right
+        { xRange:[0.06,0.38], yRange:[0.54,0.86] }, // lower-left
+        { xRange:[0.54,0.90], yRange:[0.52,0.86] }  // lower-right / mid
+      ];
+
+      const groupCount = 4;
+
+      for(let gi=0; gi<groupCount; gi++){
+        const r = regions[gi % regions.length];
+        const nCount = 4 + Math.floor(Math.random()*4); // 4–7 нод на группу
+        const basePhase = Math.random()*Math.PI*2;
+
+        for(let j=0;j<nCount;j++){
+          const rx = r.xRange[0] + Math.random()*(r.xRange[1]-r.xRange[0]);
+          const ry = r.yRange[0] + Math.random()*(r.yRange[1]-r.yRange[0]);
+          blueprintNodes.push({
+            x: rx * W,
+            y: ry * H,
+            group: gi,
+            phase: basePhase + j*0.9 + Math.random()*0.7
+          });
+        }
+      }
+
+      // локальные связи внутри групп (неровные цепочки)
+      const byGroup = {};
+      blueprintNodes.forEach((n, idx)=>{
+        if(!byGroup[n.group]) byGroup[n.group] = [];
+        byGroup[n.group].push(idx);
+      });
+
+      Object.keys(byGroup).forEach(gKey=>{
+        const arr = byGroup[gKey];
+        if(arr.length < 2) return;
+        for(let i=0;i<arr.length-1;i++){
+          // основная цепочка
+          blueprintEdges.push({ a: arr[i], b: arr[i+1] });
+          // иногда диагональная связь
+          if(Math.random()>0.55 && i+2 < arr.length){
+            blueprintEdges.push({ a: arr[i], b: arr[i+2] });
+          }
+        }
+      });
+
+      // Cross-links: несколько случайных связей между далекими нодами
+      const extraEdges = 4 + Math.floor(Math.random()*6);
+      for(let k=0;k<extraEdges;k++){
+        const a = Math.floor(Math.random()*blueprintNodes.length);
+        let b = Math.floor(Math.random()*blueprintNodes.length);
+        if(a===b) b = (b+1) % blueprintNodes.length;
+        blueprintEdges.push({ a, b });
+      }
+    }
+
+    // drawing primitives
+    function roundedRect(ctx,x,y,w,h,r){
+      const K = 0.5522847498;
+      const right = x + w, bottom = y + h;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(right - r, y);
+      ctx.bezierCurveTo(right - r + r*K, y, right, y + r - r*K, right, y + r);
+      ctx.lineTo(right, bottom - r);
+      ctx.bezierCurveTo(right, bottom - r + r*K, right - r + r*K, bottom, right - r, bottom);
+      ctx.lineTo(x + r, bottom);
+      ctx.bezierCurveTo(x + r - r*K, bottom, x, bottom - r + r*K, x, bottom - r);
+      ctx.lineTo(x, y + r);
+      ctx.bezierCurveTo(x, y + r - r*K, x + r - r*K, y, x + r, y);
+      ctx.closePath();
+    }
+
+    // background grid rotated for perspective
+    function drawGrid(t){
+      ctx.save();
+      const angle = -0.08; // slight tilt
+      ctx.translate(W*0.5, H*0.5);
+      ctx.rotate(angle);
+      ctx.translate(-W*0.5, -H*0.5);
+
+      const spacing = Math.max(36, Math.round(W / 24));
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.16;
+      for(let x=-spacing*4;x<W+spacing*4;x+=spacing){
+        ctx.beginPath();
+        ctx.moveTo(x, -spacing*4);
+        ctx.lineTo(x, H+spacing*4);
+        ctx.strokeStyle = 'rgba(10,18,30,0.24)';
+        ctx.stroke();
+      }
+      for(let y=-spacing*4;y<H+spacing*4;y+=spacing){
+        ctx.beginPath();
+        ctx.moveTo(-spacing*4, y);
+        ctx.lineTo(W+spacing*4, y);
+        ctx.strokeStyle = 'rgba(10,18,30,0.24)';
+        ctx.stroke();
+      }
+
+      // glowing probabilistic cells
+      const t0 = t*0.001;
+      for(let gx=0;gx<W;gx+=spacing*2){
+        for(let gy=0;gy<H;gy+=spacing*2){
+          const n = Math.sin((gx*0.008 + gy*0.011) + t0*1.6 + Math.sin(gy*0.002));
+          if(n>0.96){
+            const gxC = gx + spacing;
+            const gyC = gy + spacing;
+            const r = spacing*0.9*(0.7 + Math.random()*0.6);
+            const a = (n-0.96)*5.5;
+            const grd = ctx.createRadialGradient(gxC, gyC, 0, gxC, gyC, r);
+            grd.addColorStop(0, 'rgba(56,189,248,' + (0.28*a) + ')');
+            grd.addColorStop(1, 'rgba(7,10,20,0)');
+            ctx.fillStyle = grd;
+            ctx.beginPath();
+            ctx.arc(gxC,gyC,r,0,TAU);
+            ctx.fill();
+          }
+        }
+      }
+
+      ctx.restore();
+    }
+
+    // asymmetrical random abstract wireframe / dynamic digital blueprint
+    function drawBlueprintWireframe(t){
+      ctx.save();
+      const time = t * 0.001;
+      ctx.globalCompositeOperation = 'lighter';
+
+      const baseAlpha = 0.18;
+      const pulse = 0.25 + 0.25 * Math.sin(time * 0.8);
+
+      ctx.lineWidth = 0.9;
+
+      // edges с лёгким jitter и бегущими хайлайтами
+      blueprintEdges.forEach((edge, ei)=>{
+        const n0 = blueprintNodes[edge.a];
+        const n1 = blueprintNodes[edge.b];
+        if(!n0 || !n1) return;
+
+        const phase = time*0.7 + ei*0.9;
+        const jitter = 2.5 + 2.5 * Math.sin(phase*0.9);
+
+        const p0x = n0.x + Math.sin(phase + n0.group*0.7) * jitter;
+        const p0y = n0.y + Math.cos(phase*1.1 + n0.group*0.3) * jitter*0.6;
+        const p1x = n1.x + Math.sin(phase + 1.8 + n1.group*0.6) * jitter;
+        const p1y = n1.y + Math.cos(phase*1.05 + 0.7 + n1.group*0.4) * jitter*0.6;
+
+        const grd = ctx.createLinearGradient(p0x, p0y, p1x, p1y);
+        grd.addColorStop(0, 'rgba(37,99,235,' + (baseAlpha*0.7) + ')');
+        grd.addColorStop(1, 'rgba(56,189,248,' + (baseAlpha*1.2) + ')');
+        ctx.strokeStyle = grd;
+
+        ctx.beginPath();
+        ctx.moveTo(p0x, p0y);
+        ctx.lineTo(p1x, p1y);
+        ctx.stroke();
+
+        // бегущий highlight по сегменту
+        const travel = (Math.sin(time*1.15 + ei*1.37) + 1) / 2; // 0..1
+        const hx = p0x + (p1x - p0x) * travel;
+        const hy = p0y + (p1y - p0y) * travel;
+
+        const r = 2.0 + 1.8 * pulse;
+        const gNode = ctx.createRadialGradient(hx, hy, 0, hx, hy, r*4.5);
+        gNode.addColorStop(0, 'rgba(125,211,252,0.55)');
+        gNode.addColorStop(1, 'rgba(15,23,42,0)');
+        ctx.fillStyle = gNode;
+        ctx.beginPath();
+        ctx.arc(hx, hy, r*3.2, 0, TAU);
+        ctx.fill();
+      });
+
+      // ноды как мягкие пульсирующие точки blueprint-а
+      blueprintNodes.forEach((n)=>{
+        const phase = time*0.9 + n.phase;
+        const amp = 1.5 + 1.2*Math.sin(phase);
+        const nx = n.x + Math.sin(phase*0.7) * amp;
+        const ny = n.y + Math.cos(phase*0.6) * amp*0.6;
+
+        const r = 1.4 + 0.6*Math.sin(phase*1.4);
+        const gCore = ctx.createRadialGradient(nx, ny, 0, nx, ny, r*4);
+        gCore.addColorStop(0, 'rgba(59,130,246,0.6)');
+        gCore.addColorStop(1, 'rgba(15,23,42,0)');
+        ctx.fillStyle = gCore;
+        ctx.beginPath();
+        ctx.arc(nx, ny, r*3, 0, TAU);
+        ctx.fill();
+      });
+
+      ctx.restore();
+    }
+
+    // glass edge panels
+    function drawGlassFrames(t){
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const glow = Math.sin(t*0.0016) * 0.14 + 0.14;
+
+      // left
+      const g1 = ctx.createLinearGradient(0,0, W*0.12,0);
+      g1.addColorStop(0, 'rgba(38,99,235,' + (0.06+glow*0.07) + ')');
+      g1.addColorStop(1, 'rgba(7,10,20,0)');
+      ctx.fillStyle = g1;
+      roundedRect(ctx, 14, 14, Math.max(44, W*0.12), H-28, 18);
+      ctx.fill();
+
+      // right
+      const g2 = ctx.createLinearGradient(W,0, W - W*0.12,0);
+      g2.addColorStop(0, 'rgba(94,234,212,' + (0.04+glow*0.06) + ')');
+      g2.addColorStop(1, 'rgba(7,10,20,0)');
+      ctx.fillStyle = g2;
+      roundedRect(ctx, W - Math.max(44, W*0.12) - 14, 14, Math.max(44, W*0.12), H-28, 18);
+      ctx.fill();
+
+      // top thin bar
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = 'rgba(255,255,255,0.02)';
+      roundedRect(ctx, W*0.18, 10, W*0.64, 36, 10);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // equalizer bars (abstract, no text)
+    function drawBars(t){
+      const now = t*0.001;
+      const globalEnergy = 0.5 + 0.5*Math.abs(Math.sin(now*0.8));
+      const spike = Math.max(0, Math.sin(now*2.6))*1.6;
+
+      bars.forEach((b, idx)=>{
+        const ix = idx / (bars.length-1);
+        const wave = 0.6*Math.abs(Math.sin(now*1.4 + b.phase*0.7 + ix*3.3)) +
+                     0.85*Math.pow(Math.abs(Math.sin(now*0.38 + ix*6.3)),1.9);
+        const burst = (Math.sin(now*3.8 + b.phase*1.3*(idx%3 + 1))>0.9)
+          ? (0.5 + Math.random()*1.2) : 0;
+        const target = clamp(
+          (wave*0.62 + burst*0.8 + globalEnergy*0.22 + spike*0.06)*(0.86 + ix*0.36),
+          0,1
+        );
+        b.target = target;
+        b.value = lerp(b.value, b.target, 0.08 + b.speed*0.06);
+
+        const barMaxH = H - cfg.topPad - cfg.bottomPad;
+        const barH = Math.max(6, barMaxH * b.value);
+        const x = b.x - b.w*0.5;
+        const y = H - cfg.bottomPad - barH;
+
+        // gradient fill
+        const g = ctx.createLinearGradient(x, y, x, y + barH);
+        const c1r = 56, c1g = 189, c1b = 248;
+        const c2r = 94, c2g = 234, c2b = 212;
+        const c3r = 251, c3g = 191, c3b = 36;
+        const mix1 = Math.max(0, 1 - Math.abs(b.hue - 0.25)*3);
+        const mix2 = Math.max(0, 1 - Math.abs(b.hue - 0.54)*3);
+        const mix3 = Math.max(0, 1 - Math.abs(b.hue - 0.86)*3);
+        const cTop = `rgba(${Math.round(c1r*mix1 + c2r*mix2 + c3r*mix3)},${Math.round(c1g*mix1 + c2g*mix2 + c3g*mix3)},${Math.round(c1b*mix1 + c2b*mix2 + c3b*mix3)},0.98)`;
+        const cMid = `rgba(${Math.round(c1r*mix1 + c2r*mix2 + c3r*mix3)},${Math.round(c1g*mix1 + c2g*mix2 + c3g*mix3)},${Math.round(c1b*mix1 + c2b*mix2 + c3b*mix3)},0.36)`;
+        g.addColorStop(0, cTop);
+        g.addColorStop(0.6, cMid);
+        g.addColorStop(1, 'rgba(7,10,20,0.02)');
+
+        ctx.save();
+        ctx.fillStyle = g;
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        roundedRect(ctx, x, y, b.w, barH, b.w*0.45);
+        ctx.fill();
+        ctx.stroke();
+
+        const capH = Math.max(4, Math.min(12, b.w*0.8));
+        const capY = y - capH*0.9;
+        const capX = b.x - b.w*0.45;
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        roundedRect(ctx, capX, capY, b.w*0.9, capH, 2);
+        ctx.fill();
+
+        const glowAlpha = 0.38 * b.value + 0.04;
+        const g2 = ctx.createLinearGradient(x, y, x + b.w, y);
+        g2.addColorStop(0, 'rgba(255,255,255,' + (glowAlpha*0.14) + ')');
+        g2.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g2;
+        roundedRect(ctx, x, y + barH*0.08, b.w, barH*0.2, b.w*0.4);
+        ctx.fill();
+
+        ctx.restore();
+      });
+
+      drawLiquidWave(now);
+    }
+
+    function drawLiquidWave(now){
+      ctx.save();
+      const len = bars.length;
+      const left = bars[0].x - bars[0].w*0.6;
+      const right = bars[len-1].x + bars[len-1].w*0.6;
+
+      ctx.beginPath();
+      for(let i=0;i<len;i++){
+        const b = bars[i];
+        const barMaxH = H - cfg.topPad - cfg.bottomPad;
+        const hval = Math.max(4, barMaxH * b.value);
+        const tx = b.x;
+        const ty = H - cfg.bottomPad - hval + Math.sin(now*0.9 + i*0.12)*6;
+        if(i===0) ctx.moveTo(tx, ty);
+        else ctx.quadraticCurveTo(
+          bars[i-1].x,
+          (H - cfg.bottomPad - (H-cfg.topPad-cfg.bottomPad)*bars[i-1].value + ty)/2,
+          tx, ty
+        );
+      }
+      ctx.lineTo(right, H - cfg.bottomPad + 20);
+      ctx.lineTo(left, H - cfg.bottomPad + 20);
+      ctx.closePath();
+
+      const grad = ctx.createLinearGradient(0, cfg.topPad, 0, H);
+      grad.addColorStop(0, 'rgba(56,189,248,0.08)');
+      grad.addColorStop(0.5, 'rgba(94,234,212,0.06)');
+      grad.addColorStop(1, 'rgba(7,10,20,0.02)');
+
+      ctx.fillStyle = grad;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.85;
+      ctx.fill();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.restore();
+    }
+
+    // particles
+    function drawParticles(t){
+      ctx.save();
+      ctx.globalAlpha = 0.7;
+      particles.forEach(p=>{
+        p.x += p.vx + Math.sin(t*0.001 + p.tOffset)*0.12;
+        p.y += p.vy + Math.cos(t*0.0006 + p.tOffset)*0.06;
+        if(p.x < -50) p.x = W + 20;
+        if(p.x > W + 50) p.x = -20;
+        if(p.y < -50) p.y = H + 20;
+        if(p.y > H + 50) p.y = -20;
+
+        const r = p.r;
+        const grd = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r*6);
+        grd.addColorStop(0, 'rgba(94,234,212,0.06)');
+        grd.addColorStop(1, 'rgba(7,10,20,0)');
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r*4, 0, TAU);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    // beams
+    function drawBeams(t){
+      ctx.save();
+      beams.forEach(bm=>{
+        const a = bars[bm.a];
+        const c = bars[bm.b];
+        if(!a||!c) return;
+        const p = (Math.sin(t*0.001*(0.6 + bm.speed*0.2) + bm.phase*TAU) + 1)/2;
+        const alpha = 0.09 + 0.18*p;
+        const midX = lerp(a.x, c.x, 0.5);
+        const midY = Math.min(
+          H*0.45,
+          H - cfg.bottomPad - (Math.abs(a.value-c.value)*0.4 + 0.02)*H
+        );
+        const g = ctx.createLinearGradient(a.x, a.x, c.x, c.x);
+        g.addColorStop(0, 'rgba(56,189,248,' + (alpha*0.8) + ')');
+        g.addColorStop(1, 'rgba(94,234,212,' + (alpha*0.6) + ')');
+        ctx.strokeStyle = g;
+        ctx.lineWidth = 1 + 2*p;
+        ctx.beginPath();
+        ctx.moveTo(
+          a.x,
+          H - cfg.bottomPad - (H - cfg.topPad - cfg.bottomPad) * a.value * 0.9
+        );
+        ctx.quadraticCurveTo(
+          midX,
+          midY - Math.sin(t*0.0008 + bm.phase*TAU)*30,
+          c.x,
+          H - cfg.bottomPad - (H - cfg.topPad - cfg.bottomPad) * c.value * 0.9
+        );
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    // top overlay subtle vignette
+    function drawVignette(){
+      ctx.save();
+      const g = ctx.createRadialGradient(
+        W*0.5, H*0.5,
+        Math.min(W,H)*0.2,
+        W*0.5, H*0.5,
+        Math.max(W,H)
+      );
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.42)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,W,H);
+      ctx.restore();
+    }
+
+    // main loop
+    function frame(now){
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(0,0,W,H);
+
+      drawGrid(now);
+      drawBlueprintWireframe(now);
+      drawGlassFrames(now);
+      drawParticles(now);
+      drawBeams(now);
+      drawBars(now);
+      drawVignette();
+
+      requestAnimationFrame(frame);
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>
