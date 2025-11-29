@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>FUI</title>
+  <title>FUI — Smooth Motion Equalizer (wireframe HUD + radio dials)</title>
   <style>
     :root{color-scheme: dark}
     html,body{height:100%;}
@@ -20,12 +20,254 @@
       display:block;
       position:fixed;
       inset:0;
+      z-index:0;
     }
-    .edge-panel{pointer-events:none}
+    #hudOverlay{
+      position:fixed;
+      inset:0;
+      width:100%;
+      height:100%;
+      pointer-events:none;
+      z-index:2;
+      mix-blend-mode:screen;
+    }
   </style>
 </head>
 <body>
   <canvas id="fuiCanvas"></canvas>
+
+  <!-- Futuristic thin HUD SVG panels along all edges + holographic radio dials -->
+  <svg id="hudOverlay" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <!-- clipPaths for panel areas -->
+      <clipPath id="clipTopPanel">
+        <rect x="4" y="2" width="92" height="5" rx="1.2"/>
+      </clipPath>
+      <clipPath id="clipBottomPanel">
+        <rect x="6" y="93" width="88" height="4" rx="1.2"/>
+      </clipPath>
+      <clipPath id="clipLeftRail">
+        <rect x="2" y="10" width="3" height="80" rx="1.1"/>
+      </clipPath>
+      <clipPath id="clipRightRail">
+        <rect x="95" y="10" width="3" height="80" rx="1.1"/>
+      </clipPath>
+
+      <linearGradient id="hudGradEdge" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#0f172a" stop-opacity="0"/>
+        <stop offset="0.35" stop-color="#22d3ee" stop-opacity="0.6"/>
+        <stop offset="0.65" stop-color="#38bdf8" stop-opacity="0.7"/>
+        <stop offset="1" stop-color="#0f172a" stop-opacity="0"/>
+      </linearGradient>
+      <linearGradient id="hudGradVert" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0f172a" stop-opacity="0"/>
+        <stop offset="0.25" stop-color="#22c55e" stop-opacity="0.45"/>
+        <stop offset="0.75" stop-color="#38bdf8" stop-opacity="0.65"/>
+        <stop offset="1" stop-color="#0f172a" stop-opacity="0"/>
+      </linearGradient>
+
+      <!-- holographic dial glow -->
+      <radialGradient id="dialGradLight" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#e5f4ff" stop-opacity="0.9"/>
+        <stop offset="0.55" stop-color="#bae6fd" stop-opacity="0.45"/>
+        <stop offset="1" stop-color="#0f172a" stop-opacity="0"/>
+      </radialGradient>
+
+      <filter id="hudGlow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur"/>
+        <feColorMatrix in="blur" type="matrix"
+          values="0 0 0 0 0.32  0 0 0 0 0.72  0 0 0 0 0.96  0 0 0 0.85 0"
+          result="glow"/>
+        <feMerge>
+          <feMergeNode in="glow"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+
+      <style>
+        .hud-panel{
+          stroke:#a5b4fc;
+          stroke-width:0.25;
+          fill-opacity:0.25;
+          filter:url(#hudGlow);
+        }
+        .hud-panel-vert{
+          stroke:#22d3ee;
+          stroke-width:0.22;
+          fill-opacity:0.2;
+          filter:url(#hudGlow);
+        }
+        .hud-line{
+          stroke:#38bdf8;
+          stroke-width:0.18;
+          stroke-linecap:round;
+        }
+        .hud-line-dashed{
+          stroke:#67e8f9;
+          stroke-width:0.16;
+          stroke-linecap:round;
+          stroke-dasharray:2.5 2.5;
+          animation:dashShift 8s linear infinite;
+        }
+        .hud-pulse{
+          animation:hudPulse 3.8s ease-in-out infinite;
+        }
+
+        /* holographic radio dial styling */
+        .dial-ring{
+          stroke:#e5f4ff;
+          stroke-width:0.22;
+          fill:none;
+          opacity:0.9;
+        }
+        .dial-tick{
+          stroke:#e0f2fe;
+          stroke-width:0.16;
+          stroke-linecap:round;
+          opacity:0.95;
+        }
+        .dial-glow{
+          fill:url(#dialGradLight);
+          opacity:0.75;
+        }
+        .dial-sweep{
+          stroke:#f9fbff;
+          stroke-width:0.32;
+          fill:none;
+          stroke-dasharray:8 60;
+          animation:dialRotate 9s linear infinite;
+          transform-box:fill-box;
+          transform-origin:50% 50%;
+          opacity:0.9;
+        }
+
+        @keyframes dashShift{
+          to{ stroke-dashoffset:-40; }
+        }
+        @keyframes hudPulse{
+          0%,100%{ opacity:0.12; }
+          50%{ opacity:0.6; }
+        }
+        @keyframes dialRotate{
+          to{ transform:rotate(360deg); }
+        }
+      </style>
+    </defs>
+
+    <!-- top slim panel -->
+    <rect x="4" y="2" width="92" height="5" rx="1.2"
+          fill="url(#hudGradEdge)" class="hud-panel hud-pulse"/>
+    <!-- holographic dial inside top panel -->
+    <g clip-path="url(#clipTopPanel)" opacity="0.95">
+      <!-- glow disc -->
+      <circle class="dial-glow" cx="50" cy="4.5" r="11"/>
+      <!-- dial ring -->
+      <circle class="dial-ring" cx="50" cy="4.5" r="8.2"/>
+      <!-- rotating sweep arc -->
+      <circle class="dial-sweep" cx="50" cy="4.5" r="7.4"/>
+      <!-- ticks (scale) -->
+      <line class="dial-tick" x1="35" y1="4.5" x2="37" y2="4.5"/>
+      <line class="dial-tick" x1="40" y1="3.4" x2="41.9" y2="3.0"/>
+      <line class="dial-tick" x1="45" y1="2.8" x2="46.6" y2="2.2"/>
+      <line class="dial-tick" x1="50" y1="2.4" x2="50" y2="2.0"/>
+      <line class="dial-tick" x1="55" y1="2.8" x2="53.4" y2="2.2"/>
+      <line class="dial-tick" x1="60" y1="3.4" x2="58.1" y2="3.0"/>
+      <line class="dial-tick" x1="65" y1="4.5" x2="63"  y2="4.5"/>
+    </g>
+
+    <!-- bottom slim panel -->
+    <rect x="6" y="93" width="88" height="4" rx="1.2"
+          fill="url(#hudGradEdge)" class="hud-panel"/>
+    <!-- holographic dial inside bottom panel -->
+    <g clip-path="url(#clipBottomPanel)" opacity="0.95">
+      <circle class="dial-glow" cx="50" cy="95" r="10"/>
+      <circle class="dial-ring" cx="50" cy="95" r="7.6"/>
+      <circle class="dial-sweep" cx="50" cy="95" r="6.8"/>
+      <!-- linear scale ticks like radio band -->
+      <line class="dial-tick" x1="18" y1="94" x2="18" y2="96.2"/>
+      <line class="dial-tick" x1="26" y1="93.8" x2="26" y2="96.4"/>
+      <line class="dial-tick" x1="34" y1="94.1" x2="34" y2="96.2"/>
+      <line class="dial-tick" x1="42" y1="93.7" x2="42" y2="96.5"/>
+      <line class="dial-tick" x1="50" y1="93.5" x2="50" y2="96.7"/>
+      <line class="dial-tick" x1="58" y1="93.7" x2="58" y2="96.5"/>
+      <line class="dial-tick" x1="66" y1="94.1" x2="66" y2="96.2"/>
+      <line class="dial-tick" x1="74" y1="93.8" x2="74" y2="96.4"/>
+      <line class="dial-tick" x1="82" y1="94"  x2="82" y2="96.1"/>
+    </g>
+
+    <!-- left and right vertical energy rails -->
+    <rect x="2" y="10" width="3" height="80" rx="1.1"
+          fill="url(#hudGradVert)" class="hud-panel-vert"/>
+    <rect x="95" y="10" width="3" height="80" rx="1.1"
+          fill="url(#hudGradVert)" class="hud-panel-vert"/>
+
+    <!-- holographic dial inside left rail -->
+    <g clip-path="url(#clipLeftRail)" opacity="0.95">
+      <circle class="dial-glow" cx="3.5" cy="50" r="12"/>
+      <circle class="dial-ring" cx="3.5" cy="50" r="9.4"/>
+      <circle class="dial-sweep" cx="3.5" cy="50" r="8.6"/>
+      <!-- vertical scale ticks -->
+      <line class="dial-tick" x1="2.4" y1="20" x2="4.5" y2="20"/>
+      <line class="dial-tick" x1="2.2" y1="30" x2="4.7" y2="30"/>
+      <line class="dial-tick" x1="2.5" y1="40" x2="4.3" y2="40"/>
+      <line class="dial-tick" x1="2.0" y1="50" x2="5.0" y2="50"/>
+      <line class="dial-tick" x1="2.5" y1="60" x2="4.3" y2="60"/>
+      <line class="dial-tick" x1="2.2" y1="70" x2="4.7" y2="70"/>
+      <line class="dial-tick" x1="2.4" y1="80" x2="4.5" y2="80"/>
+    </g>
+
+    <!-- holographic dial inside right rail -->
+    <g clip-path="url(#clipRightRail)" opacity="0.95">
+      <circle class="dial-glow" cx="96.5" cy="50" r="12"/>
+      <circle class="dial-ring" cx="96.5" cy="50" r="9.4"/>
+      <circle class="dial-sweep" cx="96.5" cy="50" r="8.6"/>
+      <!-- vertical scale ticks mirrored -->
+      <line class="dial-tick" x1="95.0" y1="22" x2="97.8" y2="22"/>
+      <line class="dial-tick" x1="95.2" y1="32" x2="97.9" y2="32"/>
+      <line class="dial-tick" x1="95.1" y1="42" x2="97.7" y2="42"/>
+      <line class="dial-tick" x1="94.8" y1="52" x2="98.0" y2="52"/>
+      <line class="dial-tick" x1="95.1" y1="62" x2="97.7" y2="62"/>
+      <line class="dial-tick" x1="95.2" y1="72" x2="97.9" y2="72"/>
+      <line class="dial-tick" x1="95.0" y1="82" x2="97.8" y2="82"/>
+    </g>
+
+    <!-- corner notches / brackets (top-left / top-right) -->
+    <path class="hud-line" d="M 6 8 L 10 8 L 12 10"/>
+    <path class="hud-line" d="M 88 8 L 92 8 L 94 10"/>
+
+    <!-- corner notches / brackets (bottom-left / bottom-right) -->
+    <path class="hud-line" d="M 8 92 L 10 94 L 14 94"/>
+    <path class="hud-line" d="M 86 94 L 90 94 L 92 92"/>
+
+    <!-- thin inner guide lines along edges -->
+    <path class="hud-line-dashed" d="M 8 14 L 8 86"/>
+    <path class="hud-line-dashed" d="M 92 16 L 92 84"/>
+    <path class="hud-line-dashed" d="M 14 10 L 86 10"/>
+    <path class="hud-line-dashed" d="M 16 90 L 84 90"/>
+
+    <!-- small HUD ticks / marks -->
+    <line class="hud-line" x1="20" y1="4.5" x2="20" y2="6"/>
+    <line class="hud-line" x1="30" y1="4.2" x2="30" y2="6.2"/>
+    <line class="hud-line" x1="40" y1="4"   x2="40" y2="6"/>
+    <line class="hud-line" x1="60" y1="4"   x2="60" y2="6"/>
+    <line class="hud-line" x1="70" y1="4.2" x2="70" y2="6.2"/>
+    <line class="hud-line" x1="80" y1="4.5" x2="80" y2="6"/>
+
+    <line class="hud-line" x1="6"  y1="20" x2="7.8" y2="20"/>
+    <line class="hud-line" x1="6"  y1="35" x2="7.6" y2="35"/>
+    <line class="hud-line" x1="6"  y1="50" x2="7.4" y2="50"/>
+    <line class="hud-line" x1="6"  y1="65" x2="7.6" y2="65"/>
+    <line class="hud-line" x1="6"  y1="80" x2="7.8" y2="80"/>
+
+    <line class="hud-line" x1="92.2" y1="22" x2="94" y2="22"/>
+    <line class="hud-line" x1="92.4" y1="38" x2="94" y2="38"/>
+    <line class="hud-line" x1="92.6" y1="54" x2="94" y2="54"/>
+    <line class="hud-line" x1="92.4" y1="70" x2="94" y2="70"/>
+
+    <!-- subtle diagonal HUD accents -->
+    <path class="hud-line hud-pulse" d="M 14 14 L 20 16 L 24 14"/>
+    <path class="hud-line hud-pulse" d="M 76 86 L 80 88 L 86 86"/>
+  </svg>
 
   <script>
   (function(){
@@ -34,8 +276,6 @@
 
     let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
     let bars = [], particles = [], beams = [];
-    // random blueprint graph
-    let blueprintNodes = [], blueprintEdges = [];
 
     const palette = {
       cyan: 'rgba(56,189,248,',
@@ -86,7 +326,7 @@
           value: 0,
           phase: Math.random()*Math.PI*2,
           speed: 0.06 + Math.random()*0.18,
-          hue: (i / cfg.columns)
+          hue: (i/ cfg.columns)
         });
       }
 
@@ -103,84 +343,19 @@
         });
       }
 
-      // beams между барами
+      // beams
       beams = [];
       for(let i=0;i<Math.floor(cfg.columns/8);i++){
         const a = Math.floor(Math.random()*cfg.columns);
         const b = Math.min(cfg.columns-1, Math.floor(a + (Math.random()*6-3)));
         beams.push({a,b,phase:Math.random(),speed:0.02 + Math.random()*0.06});
       }
-
-      // асимметричный random abstract wireframe / blueprint
-      initBlueprint();
     }
 
     // helpers
     const TAU = Math.PI*2;
     function lerp(a,b,t){return a + (b - a) * t}
     function clamp(v,mn,mx){return Math.max(mn, Math.min(mx, v));}
-
-    // генерация рандомного blueprint-графа
-    function initBlueprint(){
-      blueprintNodes = [];
-      blueprintEdges = [];
-
-      // четыре асимметричных регионах, где «живёт» чертёж
-      const regions = [
-        { xRange:[0.08,0.32], yRange:[0.14,0.34] }, // upper-left
-        { xRange:[0.66,0.94], yRange:[0.14,0.40] }, // mid-right
-        { xRange:[0.06,0.38], yRange:[0.54,0.86] }, // lower-left
-        { xRange:[0.54,0.90], yRange:[0.52,0.86] }  // lower-right / mid
-      ];
-
-      const groupCount = 4;
-
-      for(let gi=0; gi<groupCount; gi++){
-        const r = regions[gi % regions.length];
-        const nCount = 4 + Math.floor(Math.random()*4); // 4–7 нод на группу
-        const basePhase = Math.random()*Math.PI*2;
-
-        for(let j=0;j<nCount;j++){
-          const rx = r.xRange[0] + Math.random()*(r.xRange[1]-r.xRange[0]);
-          const ry = r.yRange[0] + Math.random()*(r.yRange[1]-r.yRange[0]);
-          blueprintNodes.push({
-            x: rx * W,
-            y: ry * H,
-            group: gi,
-            phase: basePhase + j*0.9 + Math.random()*0.7
-          });
-        }
-      }
-
-      // локальные связи внутри групп (неровные цепочки)
-      const byGroup = {};
-      blueprintNodes.forEach((n, idx)=>{
-        if(!byGroup[n.group]) byGroup[n.group] = [];
-        byGroup[n.group].push(idx);
-      });
-
-      Object.keys(byGroup).forEach(gKey=>{
-        const arr = byGroup[gKey];
-        if(arr.length < 2) return;
-        for(let i=0;i<arr.length-1;i++){
-          // основная цепочка
-          blueprintEdges.push({ a: arr[i], b: arr[i+1] });
-          // иногда диагональная связь
-          if(Math.random()>0.55 && i+2 < arr.length){
-            blueprintEdges.push({ a: arr[i], b: arr[i+2] });
-          }
-        }
-      });
-
-      // Cross-links: несколько случайных связей между далекими нодами
-      const extraEdges = 4 + Math.floor(Math.random()*6);
-      for(let k=0;k<extraEdges;k++){
-        const a = Math.floor(Math.random()*blueprintNodes.length);
-        let b = Math.floor(Math.random()*blueprintNodes.length);
-        if(a===b) b = (b+1) % blueprintNodes.length;
-        blueprintEdges.push({ a, b });
-      }
-    }
 
     // drawing primitives
     function roundedRect(ctx,x,y,w,h,r){
@@ -199,7 +374,7 @@
       ctx.closePath();
     }
 
-    // background grid rotated for perspective
+    // background digital wireframe grid with dynamic motion
     function drawGrid(t){
       ctx.save();
       const angle = -0.08; // slight tilt
@@ -208,39 +383,63 @@
       ctx.translate(-W*0.5, -H*0.5);
 
       const spacing = Math.max(36, Math.round(W / 24));
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.16;
-      for(let x=-spacing*4;x<W+spacing*4;x+=spacing){
+      const time = t*0.001;
+
+      // slow drift of grid offsets to create motion
+      const offsetX = (time * 0.35 * spacing) % spacing;
+      const offsetY = (time * 0.24 * spacing) % spacing;
+
+      ctx.lineWidth = 0.9;
+      ctx.globalAlpha = 0.22;
+      ctx.globalCompositeOperation = 'screen';
+
+      // vertical lines
+      for(let x=-spacing*4 + offsetX; x<W+spacing*4; x+=spacing){
+        const gradV = ctx.createLinearGradient(x, 0, x, H);
+        gradV.addColorStop(0, 'rgba(15,23,42,0.0)');
+        gradV.addColorStop(0.35, 'rgba(34,211,238,0.22)');
+        gradV.addColorStop(0.7, 'rgba(56,189,248,0.32)');
+        gradV.addColorStop(1, 'rgba(15,23,42,0.0)');
+        ctx.strokeStyle = gradV;
         ctx.beginPath();
         ctx.moveTo(x, -spacing*4);
         ctx.lineTo(x, H+spacing*4);
-        ctx.strokeStyle = 'rgba(10,18,30,0.24)';
-        ctx.stroke();
-      }
-      for(let y=-spacing*4;y<H+spacing*4;y+=spacing){
-        ctx.beginPath();
-        ctx.moveTo(-spacing*4, y);
-        ctx.lineTo(W+spacing*4, y);
-        ctx.strokeStyle = 'rgba(10,18,30,0.24)';
         ctx.stroke();
       }
 
-      // glowing probabilistic cells
-      const t0 = t*0.001;
-      for(let gx=0;gx<W;gx+=spacing*2){
-        for(let gy=0;gy<H;gy+=spacing*2){
-          const n = Math.sin((gx*0.008 + gy*0.011) + t0*1.6 + Math.sin(gy*0.002));
-          if(n>0.96){
-            const gxC = gx + spacing;
-            const gyC = gy + spacing;
-            const r = spacing*0.9*(0.7 + Math.random()*0.6);
-            const a = (n-0.96)*5.5;
-            const grd = ctx.createRadialGradient(gxC, gyC, 0, gxC, gyC, r);
-            grd.addColorStop(0, 'rgba(56,189,248,' + (0.28*a) + ')');
+      // horizontal lines
+      for(let y=-spacing*4 + offsetY; y<H+spacing*4; y+=spacing){
+        const gradH = ctx.createLinearGradient(0, y, W, y);
+        gradH.addColorStop(0, 'rgba(15,23,42,0.0)');
+        gradH.addColorStop(0.3, 'rgba(59,130,246,0.26)');
+        gradH.addColorStop(0.8, 'rgba(45,212,191,0.32)');
+        gradH.addColorStop(1, 'rgba(15,23,42,0.0)');
+        ctx.strokeStyle = gradH;
+        ctx.beginPath();
+        ctx.moveTo(-spacing*4, y);
+        ctx.lineTo(W+spacing*4, y);
+        ctx.stroke();
+      }
+
+      // glowing nodes on intersections (sparse)
+      const t0 = time;
+      const nodeStep = spacing * 2;
+      for(let gx=-spacing*4; gx<W+spacing*4; gx+=nodeStep){
+        for(let gy=-spacing*4; gy<H+spacing*4; gy+=nodeStep){
+          const fx = gx + offsetX;
+          const fy = gy + offsetY;
+          const n = Math.sin((fx*0.01 + fy*0.012) + t0*1.4) *
+                    Math.cos((fx*0.006 - fy*0.008) - t0*1.1);
+          if(n>0.74){
+            const r = spacing*0.4 * (0.4 + (n-0.74)*1.6);
+            const alpha = (n-0.74)*2.2;
+            const grd = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
+            grd.addColorStop(0, 'rgba(94,234,212,' + (0.35*alpha) + ')');
+            grd.addColorStop(0.45, 'rgba(56,189,248,' + (0.25*alpha) + ')');
             grd.addColorStop(1, 'rgba(7,10,20,0)');
             ctx.fillStyle = grd;
             ctx.beginPath();
-            ctx.arc(gxC,gyC,r,0,TAU);
+            ctx.arc(fx, fy, r, 0, TAU);
             ctx.fill();
           }
         }
@@ -249,212 +448,274 @@
       ctx.restore();
     }
 
-    // asymmetrical random abstract wireframe / dynamic digital blueprint
+    // asymmetrical abstract wireframe / blueprint overlay
     function drawBlueprintWireframe(t){
       ctx.save();
       const time = t * 0.001;
       ctx.globalCompositeOperation = 'lighter';
 
-      const baseAlpha = 0.18;
-      const pulse = 0.25 + 0.25 * Math.sin(time * 0.8);
+      const baseAlpha = 0.22;
+      const pulse = 0.3 + 0.3 * Math.sin(time * 0.7);
+
+      // define a few asymmetric wireframe clusters (no text, just blueprint lines)
+      const clusters = [
+        [ // upper-left irregular frame
+          {x: W*0.10, y: H*0.20},
+          {x: W*0.27, y: H*0.16},
+          {x: W*0.32, y: H*0.28},
+          {x: W*0.18, y: H*0.34},
+          {x: W*0.10, y: H*0.20}
+        ],
+        [ // mid-right broken frame
+          {x: W*0.72, y: H*0.18},
+          {x: W*0.88, y: H*0.26},
+          {x: W*0.82, y: H*0.40},
+          {x: W*0.68, y: H*0.36}
+        ],
+        [ // lower-left skewed hex
+          {x: W*0.14, y: H*0.64},
+          {x: W*0.30, y: H*0.60},
+          {x: W*0.36, y: H*0.68},
+          {x: W*0.30, y: H*0.78},
+          {x: W*0.18, y: H*0.80},
+          {x: W*0.12, y: H*0.72}
+        ]
+      ];
 
       ctx.lineWidth = 0.9;
+      clusters.forEach((cluster, ci)=>{
+        if(cluster.length < 2) return;
+        const localPhase = time*0.6 + ci*1.7;
 
-      // edges с лёгким jitter и бегущими хайлайтами
-      blueprintEdges.forEach((edge, ei)=>{
-        const n0 = blueprintNodes[edge.a];
-        const n1 = blueprintNodes[edge.b];
-        if(!n0 || !n1) return;
+        // inner jitter for dynamic blueprint feeling
+        const jFactor = 3 + 3 * Math.sin(localPhase*0.9);
+        const path = cluster.map((p, pi)=>{
+          const jx = Math.sin(localPhase + pi*1.9) * jFactor;
+          const jy = Math.cos(localPhase*1.1 + pi*1.3) * jFactor*0.6;
+          return {x: p.x + jx, y: p.y + jy};
+        });
 
-        const phase = time*0.7 + ei*0.9;
-        const jitter = 2.5 + 2.5 * Math.sin(phase*0.9);
-
-        const p0x = n0.x + Math.sin(phase + n0.group*0.7) * jitter;
-        const p0y = n0.y + Math.cos(phase*1.1 + n0.group*0.3) * jitter*0.6;
-        const p1x = n1.x + Math.sin(phase + 1.8 + n1.group*0.6) * jitter;
-        const p1y = n1.y + Math.cos(phase*1.05 + 0.7 + n1.group*0.4) * jitter*0.6;
-
-        const grd = ctx.createLinearGradient(p0x, p0y, p1x, p1y);
+        const grd = ctx.createLinearGradient(path[0].x, path[0].y, path[path.length-1].x, path[path.length-1].y);
         grd.addColorStop(0, 'rgba(37,99,235,' + (baseAlpha*0.7) + ')');
-        grd.addColorStop(1, 'rgba(56,189,248,' + (baseAlpha*1.2) + ')');
+        grd.addColorStop(1, 'rgba(56,189,248,' + (baseAlpha*1.3) + ')');
         ctx.strokeStyle = grd;
 
         ctx.beginPath();
-        ctx.moveTo(p0x, p0y);
-        ctx.lineTo(p1x, p1y);
+        ctx.moveTo(path[0].x, path[0].y);
+        for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x, path[i].y);
         ctx.stroke();
 
-        // бегущий highlight по сегменту
-        const travel = (Math.sin(time*1.15 + ei*1.37) + 1) / 2; // 0..1
-        const hx = p0x + (p1x - p0x) * travel;
-        const hy = p0y + (p1y - p0y) * travel;
+        // inner secondary blueprint lines
+        ctx.globalAlpha = 0.35;
+        for(let i=0;i<path.length-2;i++){
+          ctx.beginPath();
+          ctx.moveTo(path[i].x, path[i].y);
+          ctx.lineTo(path[i+2].x, path[i+2].y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1.0;
 
-        const r = 2.0 + 1.8 * pulse;
-        const gNode = ctx.createRadialGradient(hx, hy, 0, hx, hy, r*4.5);
-        gNode.addColorStop(0, 'rgba(125,211,252,0.55)');
-        gNode.addColorStop(1, 'rgba(15,23,42,0)');
-        ctx.fillStyle = gNode;
-        ctx.beginPath();
-        ctx.arc(hx, hy, r*3.2, 0, TAU);
-        ctx.fill();
-      });
+        // moving highlight nodes along edges
+        for(let i=0;i<path.length-1;i++){
+          const p0 = path[i];
+          const p1 = path[i+1];
+          const segPhase = (time*0.8 + (ci+i)*0.9) % 1;
+          const k = 0.2 + 0.6 * ((Math.sin((time*1.2)+(ci+i)) + 1)/2);
+          const tSeg = (segPhase + k) % 1;
+          const hx = p0.x + (p1.x - p0.x) * tSeg;
+          const hy = p0.y + (p1.y - p0.y) * tSeg;
 
-      // ноды как мягкие пульсирующие точки blueprint-а
-      blueprintNodes.forEach((n)=>{
-        const phase = time*0.9 + n.phase;
-        const amp = 1.5 + 1.2*Math.sin(phase);
-        const nx = n.x + Math.sin(phase*0.7) * amp;
-        const ny = n.y + Math.cos(phase*0.6) * amp*0.6;
-
-        const r = 1.4 + 0.6*Math.sin(phase*1.4);
-        const gCore = ctx.createRadialGradient(nx, ny, 0, nx, ny, r*4);
-        gCore.addColorStop(0, 'rgba(59,130,246,0.6)');
-        gCore.addColorStop(1, 'rgba(15,23,42,0)');
-        ctx.fillStyle = gCore;
-        ctx.beginPath();
-        ctx.arc(nx, ny, r*3, 0, TAU);
-        ctx.fill();
+          const r = 2.2 + 1.6 * pulse;
+          const gNode = ctx.createRadialGradient(hx, hy, 0, hx, hy, r*4);
+          gNode.addColorStop(0, 'rgba(125,211,252,0.55)');
+          gNode.addColorStop(1, 'rgba(15,23,42,0)');
+          ctx.fillStyle = gNode;
+          ctx.beginPath();
+          ctx.arc(hx, hy, r*3, 0, TAU);
+          ctx.fill();
+        }
       });
 
       ctx.restore();
     }
 
-    // glass edge panels
+    // glass edge panels (inner, softer than SVG HUD)
     function drawGlassFrames(t){
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       const glow = Math.sin(t*0.0016) * 0.14 + 0.14;
 
-      // left
+      // left inner glow
       const g1 = ctx.createLinearGradient(0,0, W*0.12,0);
-      g1.addColorStop(0, 'rgba(38,99,235,' + (0.06+glow*0.07) + ')');
+      g1.addColorStop(0, 'rgba(38,99,235,' + (0.04+glow*0.05) + ')');
       g1.addColorStop(1, 'rgba(7,10,20,0)');
       ctx.fillStyle = g1;
-      roundedRect(ctx, 14, 14, Math.max(44, W*0.12), H-28, 18);
+      roundedRect(ctx, 18, 24, Math.max(36, W*0.08), H-48, 18);
       ctx.fill();
 
-      // right
+      // right inner glow
       const g2 = ctx.createLinearGradient(W,0, W - W*0.12,0);
-      g2.addColorStop(0, 'rgba(94,234,212,' + (0.04+glow*0.06) + ')');
+      g2.addColorStop(0, 'rgba(94,234,212,' + (0.03+glow*0.05) + ')');
       g2.addColorStop(1, 'rgba(7,10,20,0)');
       ctx.fillStyle = g2;
-      roundedRect(ctx, W - Math.max(44, W*0.12) - 14, 14, Math.max(44, W*0.12), H-28, 18);
-      ctx.fill();
-
-      // top thin bar
-      ctx.globalAlpha = 0.12;
-      ctx.fillStyle = 'rgba(255,255,255,0.02)';
-      roundedRect(ctx, W*0.18, 10, W*0.64, 36, 10);
+      roundedRect(ctx, W - Math.max(36, W*0.08) - 18, 24, Math.max(36, W*0.08), H-48, 18);
       ctx.fill();
 
       ctx.restore();
     }
 
-    // equalizer bars (abstract, no text)
+    // equalizer bars in pseudo-3D (no text)
     function drawBars(t){
       const now = t*0.001;
       const globalEnergy = 0.5 + 0.5*Math.abs(Math.sin(now*0.8));
       const spike = Math.max(0, Math.sin(now*2.6))*1.6;
 
+      const baseY = H - cfg.bottomPad;
+      const barMaxH = H - cfg.topPad - cfg.bottomPad;
+      const topPoints = [];
+
+      const denom = Math.max(1, bars.length - 1);
+
       bars.forEach((b, idx)=>{
-        const ix = idx / (bars.length-1);
+        const ix = idx / denom;
         const wave = 0.6*Math.abs(Math.sin(now*1.4 + b.phase*0.7 + ix*3.3)) +
                      0.85*Math.pow(Math.abs(Math.sin(now*0.38 + ix*6.3)),1.9);
-        const burst = (Math.sin(now*3.8 + b.phase*1.3*(idx%3 + 1))>0.9)
-          ? (0.5 + Math.random()*1.2) : 0;
-        const target = clamp(
-          (wave*0.62 + burst*0.8 + globalEnergy*0.22 + spike*0.06)*(0.86 + ix*0.36),
-          0,1
-        );
+        const burst = (Math.sin(now*3.8 + b.phase*1.3* (idx%3 + 1))>0.9) ? (0.5 + Math.random()*1.2) : 0;
+        const target = clamp((wave*0.62 + burst*0.8 + globalEnergy*0.22 + spike*0.06)*(0.86 + ix*0.36), 0, 1);
         b.target = target;
         b.value = lerp(b.value, b.target, 0.08 + b.speed*0.06);
 
-        const barMaxH = H - cfg.topPad - cfg.bottomPad;
-        const barH = Math.max(6, barMaxH * b.value);
-        const x = b.x - b.w*0.5;
-        const y = H - cfg.bottomPad - barH;
+        const height = Math.max(6, barMaxH * b.value);
+        const wBar = b.w;
+        const xCenter = b.x;
+        const x = xCenter - wBar*0.5;
+        const frontTopY = baseY - height;
 
-        // gradient fill
-        const g = ctx.createLinearGradient(x, y, x, y + barH);
+        // depth (экструзия) для псевдо-3D
+        const depth = wBar * 0.7;
+        const dx = depth;
+        const dy = depth * 0.7;
+
+        const A = { x: x,         y: baseY };      // front bottom-left
+        const B = { x: x + wBar,  y: baseY };      // front bottom-right
+        const C = { x: x + wBar,  y: frontTopY };  // front top-right
+        const D = { x: x,         y: frontTopY };  // front top-left
+
+        const E = { x: D.x - dx,  y: D.y - dy };   // back top-left
+        const F = { x: C.x - dx,  y: C.y - dy };   // back top-right
+        const Bp = { x: B.x - dx, y: B.y - dy };   // back bottom-right (for side)
+
+        // base color
         const c1r = 56, c1g = 189, c1b = 248;
         const c2r = 94, c2g = 234, c2b = 212;
         const c3r = 251, c3g = 191, c3b = 36;
         const mix1 = Math.max(0, 1 - Math.abs(b.hue - 0.25)*3);
         const mix2 = Math.max(0, 1 - Math.abs(b.hue - 0.54)*3);
         const mix3 = Math.max(0, 1 - Math.abs(b.hue - 0.86)*3);
-        const cTop = `rgba(${Math.round(c1r*mix1 + c2r*mix2 + c3r*mix3)},${Math.round(c1g*mix1 + c2g*mix2 + c3g*mix3)},${Math.round(c1b*mix1 + c2b*mix2 + c3b*mix3)},0.98)`;
-        const cMid = `rgba(${Math.round(c1r*mix1 + c2r*mix2 + c3r*mix3)},${Math.round(c1g*mix1 + c2g*mix2 + c3g*mix3)},${Math.round(c1b*mix1 + c2b*mix2 + c3b*mix3)},0.36)`;
-        g.addColorStop(0, cTop);
-        g.addColorStop(0.6, cMid);
-        g.addColorStop(1, 'rgba(7,10,20,0.02)');
+        const r = Math.round(c1r*mix1 + c2r*mix2 + c3r*mix3);
+        const g = Math.round(c1g*mix1 + c2g*mix2 + c3g*mix3);
+        const bl = Math.round(c1b*mix1 + c2b*mix2 + c3b*mix3);
 
-        ctx.save();
-        ctx.fillStyle = g;
-        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        // front face
+        const frontGrad = ctx.createLinearGradient(A.x, D.y, A.x, A.y);
+        frontGrad.addColorStop(0, `rgba(${r},${g},${bl},0.95)`);
+        frontGrad.addColorStop(1, `rgba(${r},${g},${bl},0.22)`);
+        ctx.fillStyle = frontGrad;
+        ctx.strokeStyle = `rgba(${r},${g},${bl},0.35)`;
         ctx.lineWidth = 1;
-        roundedRect(ctx, x, y, b.w, barH, b.w*0.45);
+        ctx.beginPath();
+        ctx.moveTo(A.x, A.y);
+        ctx.lineTo(B.x, B.y);
+        ctx.lineTo(C.x, C.y);
+        ctx.lineTo(D.x, D.y);
+        ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
-        const capH = Math.max(4, Math.min(12, b.w*0.8));
-        const capY = y - capH*0.9;
-        const capX = b.x - b.w*0.45;
-        ctx.fillStyle = 'rgba(255,255,255,0.04)';
-        roundedRect(ctx, capX, capY, b.w*0.9, capH, 2);
+        // top face
+        const rTop = Math.min(255, r + 40);
+        const gTop = Math.min(255, g + 40);
+        const bTop = Math.min(255, bl + 40);
+        const topGrad = ctx.createLinearGradient(E.x, E.y, C.x, C.y);
+        topGrad.addColorStop(0, `rgba(${rTop},${gTop},${bTop},0.9)`);
+        topGrad.addColorStop(1, `rgba(${r},${g},${bl},0.4)`);
+        ctx.fillStyle = topGrad;
+        ctx.beginPath();
+        ctx.moveTo(D.x, D.y);
+        ctx.lineTo(C.x, C.y);
+        ctx.lineTo(F.x, F.y);
+        ctx.lineTo(E.x, E.y);
+        ctx.closePath();
         ctx.fill();
 
-        const glowAlpha = 0.38 * b.value + 0.04;
-        const g2 = ctx.createLinearGradient(x, y, x + b.w, y);
-        g2.addColorStop(0, 'rgba(255,255,255,' + (glowAlpha*0.14) + ')');
-        g2.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = g2;
-        roundedRect(ctx, x, y + barH*0.08, b.w, barH*0.2, b.w*0.4);
+        // side face (right)
+        const sideGrad = ctx.createLinearGradient(B.x, B.y, Bp.x, Bp.y);
+        sideGrad.addColorStop(0, `rgba(${r},${g},${bl},0.7)`);
+        sideGrad.addColorStop(1, `rgba(${Math.round(r*0.4)},${Math.round(g*0.4)},${Math.round(bl*0.4)},0.2)`);
+        ctx.fillStyle = sideGrad;
+        ctx.beginPath();
+        ctx.moveTo(B.x, B.y);
+        ctx.lineTo(Bp.x, Bp.y);
+        ctx.lineTo(F.x, F.y);
+        ctx.lineTo(C.x, C.y);
+        ctx.closePath();
         ctx.fill();
 
-        ctx.restore();
+        // glowing edge highlight on top front edge (D -> C)
+        const edgeGrad = ctx.createLinearGradient(D.x, D.y, C.x, C.y);
+        edgeGrad.addColorStop(0, 'rgba(255,255,255,' + (0.15 + 0.25*b.value) + ')');
+        edgeGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.strokeStyle = edgeGrad;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(D.x, D.y);
+        ctx.lineTo(C.x, C.y);
+        ctx.stroke();
+
+        // wave anchor (center of top face)
+        const topCx = (D.x + C.x + E.x + F.x) / 4;
+        const topCy = (D.y + C.y + E.y + F.y) / 4;
+        topPoints.push({ x: topCx, y: topCy });
       });
 
-      drawLiquidWave(now);
+      drawLiquidWave(now, topPoints);
     }
 
-    function drawLiquidWave(now){
+    function drawLiquidWave(now, topPoints){
+      if(!topPoints || !topPoints.length) return;
       ctx.save();
-      const len = bars.length;
-      const left = bars[0].x - bars[0].w*0.6;
-      const right = bars[len-1].x + bars[len-1].w*0.6;
+      const baseY = H - cfg.bottomPad;
+      const len = topPoints.length;
 
       ctx.beginPath();
       for(let i=0;i<len;i++){
-        const b = bars[i];
-        const barMaxH = H - cfg.topPad - cfg.bottomPad;
-        const hval = Math.max(4, barMaxH * b.value);
-        const tx = b.x;
-        const ty = H - cfg.bottomPad - hval + Math.sin(now*0.9 + i*0.12)*6;
-        if(i===0) ctx.moveTo(tx, ty);
-        else ctx.quadraticCurveTo(
-          bars[i-1].x,
-          (H - cfg.bottomPad - (H-cfg.topPad-cfg.bottomPad)*bars[i-1].value + ty)/2,
-          tx, ty
-        );
+        const p = topPoints[i];
+        const waveY = p.y + Math.sin(now*0.9 + i*0.18)*4;
+        const waveX = p.x + Math.cos(now*0.4 + i*0.15)*1.5;
+        if(i===0){
+          ctx.moveTo(waveX, waveY);
+        }else{
+          const prev = topPoints[i-1];
+          const prevY = prev.y + Math.sin(now*0.9 + (i-1)*0.18)*4;
+          const prevX = prev.x + Math.cos(now*0.4 + (i-1)*0.15)*1.5;
+          ctx.quadraticCurveTo(prevX, prevY, waveX, waveY);
+        }
       }
-      ctx.lineTo(right, H - cfg.bottomPad + 20);
-      ctx.lineTo(left, H - cfg.bottomPad + 20);
-      ctx.closePath();
 
-      const grad = ctx.createLinearGradient(0, cfg.topPad, 0, H);
-      grad.addColorStop(0, 'rgba(56,189,248,0.08)');
-      grad.addColorStop(0.5, 'rgba(94,234,212,0.06)');
-      grad.addColorStop(1, 'rgba(7,10,20,0.02)');
+      const grad = ctx.createLinearGradient(0, cfg.topPad, 0, baseY);
+      grad.addColorStop(0, 'rgba(56,189,248,0.12)');
+      grad.addColorStop(0.5, 'rgba(94,234,212,0.5)');
+      grad.addColorStop(1, 'rgba(251,191,36,0.0)');
 
-      ctx.fillStyle = grad;
+      ctx.strokeStyle = grad;
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.85;
-      ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.lineWidth = 2.2;
+      ctx.globalAlpha = 0.9;
+      ctx.stroke();
       ctx.restore();
     }
 
-    // particles
+    // subtle particles that drift
     function drawParticles(t){
       ctx.save();
       ctx.globalAlpha = 0.7;
@@ -478,36 +739,25 @@
       ctx.restore();
     }
 
-    // beams
+    // connecting beams between random bars
     function drawBeams(t){
       ctx.save();
       beams.forEach(bm=>{
         const a = bars[bm.a];
         const c = bars[bm.b];
         if(!a||!c) return;
-        const p = (Math.sin(t*0.001*(0.6 + bm.speed*0.2) + bm.phase*TAU) + 1)/2;
+        const p = (Math.sin(t*0.001* (0.6 + bm.speed*0.2) + bm.phase*TAU) + 1)/2;
         const alpha = 0.09 + 0.18*p;
         const midX = lerp(a.x, c.x, 0.5);
-        const midY = Math.min(
-          H*0.45,
-          H - cfg.bottomPad - (Math.abs(a.value-c.value)*0.4 + 0.02)*H
-        );
+        const midY = Math.min(H*0.45, H - cfg.bottomPad - (Math.abs(a.value-c.value)*0.4 + 0.02)*H);
         const g = ctx.createLinearGradient(a.x, a.x, c.x, c.x);
         g.addColorStop(0, 'rgba(56,189,248,' + (alpha*0.8) + ')');
         g.addColorStop(1, 'rgba(94,234,212,' + (alpha*0.6) + ')');
         ctx.strokeStyle = g;
         ctx.lineWidth = 1 + 2*p;
         ctx.beginPath();
-        ctx.moveTo(
-          a.x,
-          H - cfg.bottomPad - (H - cfg.topPad - cfg.bottomPad) * a.value * 0.9
-        );
-        ctx.quadraticCurveTo(
-          midX,
-          midY - Math.sin(t*0.0008 + bm.phase*TAU)*30,
-          c.x,
-          H - cfg.bottomPad - (H - cfg.topPad - cfg.bottomPad) * c.value * 0.9
-        );
+        ctx.moveTo(a.x, H - cfg.bottomPad - (H - cfg.topPad - cfg.bottomPad) * a.value * 0.9);
+        ctx.quadraticCurveTo(midX, midY - Math.sin(t*0.0008 + bm.phase*TAU)*30, c.x, H - cfg.bottomPad - (H - cfg.topPad - cfg.bottomPad) * c.value * 0.9);
         ctx.stroke();
       });
       ctx.restore();
@@ -516,12 +766,7 @@
     // top overlay subtle vignette
     function drawVignette(){
       ctx.save();
-      const g = ctx.createRadialGradient(
-        W*0.5, H*0.5,
-        Math.min(W,H)*0.2,
-        W*0.5, H*0.5,
-        Math.max(W,H)
-      );
+      const g = ctx.createRadialGradient(W*0.5, H*0.5, Math.min(W,H)*0.2, W*0.5, H*0.5, Math.max(W,H));
       g.addColorStop(0, 'rgba(0,0,0,0)');
       g.addColorStop(1, 'rgba(0,0,0,0.42)');
       ctx.fillStyle = g;
