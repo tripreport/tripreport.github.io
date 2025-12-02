@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GitVerse · Story Case Hero + Timeline</title>
+
+    <!-- Tailwind CSS v4 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+    <style type="text/tailwindcss">
+      @theme {
+        --color-bg-main: #020617; /* фон */
+        --color-grid-fine: #0b1120; /* мелкие точки */
+        --color-grid-line: rgba(30, 64, 175, 0.55); /* диагональный крупный грид */
+      }
+
+      @layer base {
+        ::-webkit-scrollbar {
+          width: 0;
+          height: 0;
+        }
+
+        html,
+        body {
+          margin: 0;
+          padding: 0;
+        }
+
+        .bg-blueprint {
+          background-color: var(--color-bg-main);
+          background-image:
+            /* мелкие точки */
+            radial-gradient(circle at 1px 1px, var(--color-grid-fine) 1px, transparent 0),
+            /* крупные точки в центрах крупных квадратов */
+            radial-gradient(circle at 50% 50%, rgba(148, 163, 184, 0.45) 2px, transparent 0),
+            /* изометрический диагональный грид */
+            linear-gradient(120deg, var(--color-grid-line) 1px, transparent 0),
+            linear-gradient(300deg, var(--color-grid-line) 1px, transparent 0),
+            /* ортогональный wireframe-грид */
+            linear-gradient(0deg, rgba(148, 163, 184, 0.12) 1px, transparent 0),
+            linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 0);
+          background-size:
+            16px 16px,   /* мелкая сетка точек */
+            110px 110px, /* крупные центральные точки */
+            220px 220px,
+            220px 220px,
+            110px 110px,
+            110px 110px;
+          background-position:
+            0 0,
+            center center,
+            center center,
+            center center,
+            center center,
+            center center;
+        }
+
+        /* Шкалы-линейки */
+        .ruler-x {
+          position: relative;
+        }
+        .ruler-x::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 3px;
+          background-image:
+            repeating-linear-gradient(
+              to right,
+              rgba(148, 163, 184, 0.55) 0,
+              rgba(148, 163, 184, 0.55) 1px,
+              transparent 1px,
+              transparent 8px
+            );
+        }
+        .ruler-x::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 6px;
+          background-image:
+            repeating-linear-gradient(
+              to right,
+              rgba(148, 163, 184, 0.9) 0,
+              rgba(148, 163, 184, 0.9) 1px,
+              transparent 1px,
+              transparent 110px
+            );
+        }
+
+        .ruler-y {
+          position: relative;
+        }
+        .ruler-y::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: 0;
+          width: 3px;
+          background-image:
+            repeating-linear-gradient(
+              to bottom,
+              rgba(148, 163, 184, 0.55) 0,
+              rgba(148, 163, 184, 0.55) 1px,
+              transparent 1px,
+              transparent 8px
+            );
+        }
+        .ruler-y::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: 0;
+          width: 6px;
+          background-image:
+            repeating-linear-gradient(
+              to bottom,
+              rgba(148, 163, 184, 0.9) 0,
+              rgba(148, 163, 184, 0.9) 1px,
+              transparent 1px,
+              transparent 110px
+            );
+        }
+
+        .grid-dot {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          border-radius: 9999px;
+          background: var(--dot-color, rgba(34, 197, 94, 0.95));
+          box-shadow:
+            0 0 4px var(--dot-color, rgba(34, 197, 94, 0.9)),
+            0 0 10px var(--dot-color, rgba(34, 197, 94, 0.7));
+          opacity: 0;
+          transform: translate(-50%, -50%);
+          animation: hackerDotBlink 3.2s infinite ease-in-out;
+          animation-delay: var(--delay, 0s);
+        }
+        #gridGlow.dots-paused .grid-dot {
+          animation-play-state: paused;
+        }
+
+        /* LED-индикатор */
+        .led-indicator {
+          position: relative;
+          width: 14px;
+          height: 14px;
+          border-radius: 9999px;
+          border-width: 1px;
+          border-style: solid;
+          cursor: pointer;
+          padding: 0;
+        }
+        .led-indicator::after {
+          content: "";
+          position: absolute;
+          inset: 3px;
+          border-radius: inherit;
+          background: rgba(248, 250, 252, 0.65);
+          opacity: 0.15;
+        }
+        .led-on {
+          border-color: rgba(52, 211, 153, 0.95);
+          background: radial-gradient(circle at 30% 30%, #bbf7d0 0, #22c55e 35%, #065f46 100%);
+          box-shadow:
+            0 0 4px rgba(52, 211, 153, 0.9),
+            0 0 10px rgba(52, 211, 153, 0.7);
+        }
+        .led-off {
+          border-color: rgba(148, 163, 184, 0.6);
+          background: radial-gradient(circle at 30% 30%, #0f172a 0, #020617 70%);
+          box-shadow: none;
+        }
+
+        .motion-layer {
+          opacity: 1;
+          transition: opacity 0.55s ease-in-out;
+        }
+        .motion-layer.motion-off {
+          opacity: 0;
+        }
+
+        .eeg-strip {
+          position: relative;
+          display: flex;
+          align-items: flex-end;
+          gap: 3px;
+          width: 100%;
+          height: 10px;
+          opacity: 0.9;
+          animation: rowDrift 6.4s ease-in-out infinite;
+          animation-delay: var(--rowDelay, 0s);
+        }
+        .eeg-strip:nth-child(odd) {
+          opacity: 0.65;
+        }
+
+        .eq-bar {
+          flex: 1;
+          max-width: 6px;
+          border-radius: 9999px;
+          background: linear-gradient(to top, rgba(15, 23, 42, 0.0), rgba(148, 163, 184, 0.7));
+          transform-origin: bottom center;
+          transform: scaleY(0.15);
+          opacity: 0.85;
+          animation: eqPulse 1.8s ease-in-out infinite;
+          animation-delay: var(--delay, 0s);
+          animation-duration: var(--duration, 1.8s);
+        }
+        .eq-bar:nth-child(3n) {
+          background: linear-gradient(to top, rgba(15, 23, 42, 0.0), rgba(56, 189, 248, 0.85));
+        }
+        .eq-bar:nth-child(5n) {
+          background: linear-gradient(to top, rgba(15, 23, 42, 0.0), rgba(94, 234, 212, 0.9));
+        }
+
+        .eeg-strip::before {
+          content: "";
+          position: absolute;
+          inset-inline: 0;
+          top: 2px;
+          bottom: 2px;
+          border-radius: 9999px;
+          border-top: 1px solid rgba(148, 163, 184, 0.14);
+          border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+          opacity: 0.5;
+          pointer-events: none;
+        }
+        .eeg-strip::after {
+          content: "";
+          position: absolute;
+          inset-inline: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          border-radius: 9999px;
+          border-top: 1px dashed rgba(148, 163, 184, 0.12);
+          opacity: 0.35;
+          filter: blur(0.3px);
+          pointer-events: none;
+        }
+        #eegTracks.eq-paused .eq-bar,
+        #eegTracks.eq-paused .eeg-strip {
+          animation-play-state: paused;
+        }
+
+        /* Crypto-текст */
+        .crypto-text {
+          position: relative;
+          display: inline-block;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+        }
+        .crypto-text--value {
+          letter-spacing: 0.12em;
+        }
+        .crypto-text--accent {
+          color: rgba(45, 212, 191, 0.95);
+          text-shadow:
+            0 0 4px rgba(34, 211, 238, 0.8),
+            0 0 12px rgba(34, 211, 238, 0.4);
+        }
+        .crypto-text--version {
+          text-shadow:
+            0 0 6px rgba(56, 189, 248, 0.7),
+            0 0 18px rgba(37, 99, 235, 0.6);
+        }
+
+        /* Таймлайн GitVerse */
+        .timeline-node {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0.25rem;
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 0.16em;
+          color: rgba(148, 163, 184, 0.7);
+        }
+        .timeline-node::before {
+          content: "";
+          width: 10px;
+          height: 10px;
+          border-radius: 9999px;
+          border: 1px solid rgba(148, 163, 184, 0.7);
+          background: radial-gradient(circle at 30% 30%, rgba(15, 23, 42, 1), rgba(30, 64, 175, 0.7));
+          box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.9);
+          transition: all 0.28s ease-out;
+        }
+        .timeline-node-active {
+          color: rgba(248, 250, 252, 0.96);
+        }
+        .timeline-node-active::before {
+          border-color: rgba(16, 185, 129, 0.95);
+          background: radial-gradient(circle at 30% 30%, #a7f3d0, #10b981);
+          box-shadow:
+            0 0 6px rgba(16, 185, 129, 0.9),
+            0 0 18px rgba(16, 185, 129, 0.6);
+          transform: scale(1.15);
+        }
+
+        @keyframes rowDrift {
+          0%, 100% {
+            transform: translateX(0px);
+          }
+          20% {
+            transform: translateX(1.5px);
+          }
+          40% {
+            transform: translateX(-2px);
+          }
+          60% {
+            transform: translateX(1px);
+          }
+          80% {
+            transform: translateX(-1px);
+          }
+        }
+
+        @keyframes eqPulse {
+          0%, 100% {
+            transform: scaleY(0.25);
+          }
+          18% {
+            transform: scaleY(0.95);
+          }
+          38% {
+            transform: scaleY(0.4);
+          }
+          58% {
+            transform: scaleY(0.8);
+          }
+          78% {
+            transform: scaleY(0.35);
+          }
+        }
+
+        @keyframes hackerDotBlink {
+          0%, 12%, 100% {
+            opacity: 0;
+          }
+          18%, 26% {
+            opacity: 1;
+          }
+          32%, 42% {
+            opacity: 0.45;
+          }
+          55%, 70% {
+            opacity: 0;
+          }
+        }
+      }
+    </style>
+  </head>
+
+  <body class="min-h-screen bg-bg-main text-slate-100 overflow-hidden">
+    <div class="relative min-h-screen bg-blueprint">
+      <!-- мигающие точки -->
+      <div id="gridGlow" class="pointer-events-none absolute inset-0 motion-layer dots-paused motion-off"></div>
+
+      <!-- Верхняя панель -->
+      <div class="fixed inset-x-0 top-0 h-14 bg-slate-950/60 backdrop-blur-sm border-b border-slate-700/70 flex items-center
+        justify-between px-6 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+        <span>TOP PANEL</span>
+        <div class="flex items-center gap-3">
+          <span>UI · STATUS</span>
+          <button
+            id="blinkToggle"
+            type="button"
+            aria-label="Toggle grid glow"
+            class="led-indicator led-off"
+          ></button>
+        </div>
+      </div>
+
+      <!-- Нижняя панель -->
+      <div class="fixed inset-x-0 bottom-0 h-14 bg-slate-950/60 backdrop-blur-sm border-t border-slate-700/70 flex items-center
+        justify-between px-6 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+        <span>BOTTOM PANEL</span>
+        <span>LOG · TIMELINE</span>
+      </div>
+
+      <!-- Левая панель с Git-веткой -->
+      <div class="fixed left-0 top-14 bottom-14 w-40 bg-slate-950/60 backdrop-blur-sm border-r border-slate-700/70 px-3 py-4
+        text-[10px] uppercase tracking-[0.16em] text-slate-400">
+        <div class="flex flex-col h-full">
+          <div class="flex items-center justify-start text-[9px]">
+            <span>LEFT PANEL</span>
+          </div>
+          <div class="mt-2 flex-1">
+            <svg viewBox="0 0 160 680" class="h-full w-full" style="overflow: visible">
+              <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+                <!-- основной ствол -->
+                <line x1="120" y1="0" x2="120" y2="680" stroke="#020617" stroke-width="18" opacity="0.95" />
+                <line x1="120" y1="0" x2="120" y2="680" stroke="#0f172a" stroke-width="22" opacity="0.9" />
+                <line x1="120" y1="0" x2="120" y2="680" stroke="#38bdf8" stroke-width="3.2" opacity="0.95" />
+
+                <!-- большие узлы -->
+                <g>
+                  <g>
+                    <circle cx="120" cy="50" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="120" cy="50" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="120" cy="140" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="120" cy="140" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="120" cy="230" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="120" cy="230" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="120" cy="320" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="120" cy="320" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="120" cy="410" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="120" cy="410" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="120" cy="500" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="120" cy="500" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="120" cy="590" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="120" cy="590" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                </g>
+
+                <!-- разветвления (подветки) -->
+                <g stroke="#38bdf8" stroke-width="1.4">
+                  <!-- ветка от узла 3 вниз -->
+                  <polyline points="120,230 145,230 145,265" />
+                  <circle cx="145" cy="265" r="7" fill="#020617" stroke="#38bdf8" stroke-width="1.5" />
+                  <!-- ветка от узла 4 вверх -->
+                  <polyline points="120,320 150,320 150,290" />
+                  <circle cx="150" cy="290" r="7" fill="#020617" stroke="#38bdf8" stroke-width="1.5" />
+                  <!-- ветка от узла 5 вниз -->
+                  <polyline points="120,410 145,410 145,445" />
+                  <circle cx="145" cy="445" r="7" fill="#020617" stroke="#38bdf8" stroke-width="1.5" />
+                </g>
+
+                <!-- ветви-коммиты вправо -->
+                <line x1="120" y1="140" x2="360" y2="140" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="220" y="114" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="228" y="122" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="238" y="140" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    a1f9c3d
+                  </text>
+                  <text x="238" y="150" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    audio.capture · v1
+                  </text>
+                </g>
+
+                <line x1="120" y1="230" x2="360" y2="230" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="220" y="204" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="228" y="212" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="238" y="230" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    c7b2e10
+                  </text>
+                  <text x="238" y="240" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    video.ingest · sync
+                  </text>
+                </g>
+
+                <line x1="120" y1="320" x2="360" y2="320" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="220" y="294" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="228" y="302" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="238" y="320" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    e3d9aa4
+                  </text>
+                  <text x="238" y="330" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    images.ocr · pass
+                  </text>
+                </g>
+
+                <line x1="120" y1="410" x2="360" y2="410" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="220" y="384" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="228" y="392" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="238" y="410" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    9af0b21
+                  </text>
+                  <text x="238" y="420" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    messages.sync · nlp
+                  </text>
+                </g>
+
+                <line x1="120" y1="500" x2="360" y2="500" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="220" y="474" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="228" y="482" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="238" y="500" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    b5c41fe
+                  </text>
+                  <text x="238" y="510" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    case.snapshot · tag
+                  </text>
+                </g>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Правая панель с Git-веткой -->
+      <div class="fixed right-0 top-14 bottom-14 w-40 bg-slate-950/60 backdrop-blur-sm border-l border-slate-700/70 px-3 py-4
+        text-[10px] uppercase tracking-[0.16em] text-slate-400">
+        <div class="flex flex-col h-full">
+          <div class="flex items-center justify-end text-[9px]">
+            <span>RIGHT PANEL</span>
+          </div>
+          <div class="mt-2 flex-1">
+            <svg viewBox="0 0 160 680" class="h-full w-full" style="overflow: visible">
+              <g stroke-linecap="round" stroke-linejoin="round" fill="none">
+                <!-- ствол -->
+                <line x1="40" y1="0" x2="40" y2="680" stroke="#020617" stroke-width="18" opacity="0.95" />
+                <line x1="40" y1="0" x2="40" y2="680" stroke="#0f172a" stroke-width="22" opacity="0.9" />
+                <line x1="40" y1="0" x2="40" y2="680" stroke="#38bdf8" stroke-width="3.2" opacity="0.95" />
+
+                <!-- большие узлы -->
+                <g>
+                  <g>
+                    <circle cx="40" cy="50" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="40" cy="50" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="40" cy="140" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="40" cy="140" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="40" cy="230" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="40" cy="230" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="40" cy="320" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="40" cy="320" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="40" cy="410" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="40" cy="410" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="40" cy="500" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="40" cy="500" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                  <g>
+                    <circle cx="40" cy="590" r="24" fill="#020617" stroke="#0f172a" stroke-width="6" />
+                    <circle cx="40" cy="590" r="18" fill="#020617" stroke="#38bdf8" stroke-width="2" />
+                  </g>
+                </g>
+
+                <!-- разветвления (подветки, зеркально) -->
+                <g stroke="#38bdf8" stroke-width="1.4">
+                  <!-- ветка от узла 3 вниз -->
+                  <polyline points="40,230 15,230 15,265" />
+                  <circle cx="15" cy="265" r="7" fill="#020617" stroke="#38bdf8" stroke-width="1.5" />
+                  <!-- ветка от узла 4 вверх -->
+                  <polyline points="40,320 10,320 10,290" />
+                  <circle cx="10" cy="290" r="7" fill="#020617" stroke="#38bdf8" stroke-width="1.5" />
+                  <!-- ветка от узла 5 вниз -->
+                  <polyline points="40,410 15,410 15,445" />
+                  <circle cx="15" cy="445" r="7" fill="#020617" stroke="#38bdf8" stroke-width="1.5" />
+                </g>
+
+                <!-- ветви-коммиты влево -->
+                <line x1="40" y1="140" x2="-60" y2="140" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="-220" y="114" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="-212" y="122" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="-202" y="140" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    f0e19ac
+                  </text>
+                  <text x="-202" y="150" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    nlp.entities · gigachat
+                  </text>
+                </g>
+
+                <line x1="40" y1="230" x2="-60" y2="230" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="-220" y="204" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="-212" y="212" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="-202" y="230" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    7bc402e
+                  </text>
+                  <text x="-202" y="240" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    nlu.frames · yagpt
+                  </text>
+                </g>
+
+                <line x1="40" y1="320" x2="-60" y2="320" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="-220" y="294" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="-212" y="302" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="-202" y="320" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    3de7aa1
+                  </text>
+                  <text x="-202" y="330" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    consensus.diff · ai
+                  </text>
+                </g>
+
+                <line x1="40" y1="410" x2="-60" y2="410" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="-220" y="384" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="-212" y="392" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="-202" y="410" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    0a9c5f8
+                  </text>
+                  <text x="-202" y="420" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    law.mapping · link
+                  </text>
+                </g>
+
+                <line x1="40" y1="500" x2="-60" y2="500" stroke="#64748b" stroke-width="1.1" />
+                <g>
+                  <rect x="-220" y="474" rx="14" ry="14" width="160" height="60"
+                    fill="#020617" stroke="#020617" opacity="0.92" />
+                  <rect x="-212" y="482" rx="10" ry="10" width="144" height="44"
+                    fill="#020617" stroke="#1f2937" />
+                  <text x="-202" y="500" fill="#e5e7eb" font-size="7"
+                    font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace">
+                    d4f71b2
+                  </text>
+                  <text x="-202" y="510" fill="#9ca3af" font-size="6"
+                    font-family="system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+                    neuro-lawyer · brief
+                  </text>
+                </g>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Линейки -->
+      <div class="pointer-events-none fixed left-40 top-16 bottom-16 w-[6px] ruler-y"></div>
+      <div class="pointer-events-none fixed left-44 right-44 bottom-14 h-[6px] ruler-x"></div>
+
+      <!-- Центральный блок: Hero + таймлайн -->
+      <div class="fixed left-40 right-40 top-14 bottom-14 px-6 py-6 flex flex-col gap-4 pointer-events-auto">
+        <!-- HERO -->
+        <section
+          id="heroPanel"
+          class="relative rounded-2xl border border-slate-700/70 bg-slate-950/80 shadow-xl px-5 py-4 overflow-hidden"
+        >
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col gap-1">
+              <div class="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                GitVerse / forensic-cases /
+                <span class="crypto-text crypto-text--version" data-text="case-repo">case-repo</span>
+              </div>
+              <h1
+                id="repoTitle"
+                class="crypto-text crypto-text--accent text-sm sm:text-base md:text-lg"
+                data-text="Дело № XXXX-XXXX"
+              >
+                Дело № XXXX-XXXX
+              </h1>
+              <p class="mt-1 text-[11px] leading-relaxed text-slate-300">
+                Репозиторий форензик-артефактов для
+                <span
+                  class="crypto-text crypto-text--value"
+                  data-text="Дело № XXXX-XXXX"
+                  data-case-id-target
+                >
+                  Дело № XXXX-XXXX
+                </span>
+                : аудио, видео, изображения, сообщения и их юридическая квалификация.
+              </p>
+            </div>
+            <div class="hidden sm:flex flex-col items-end gap-1 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+              <span class="crypto-text crypto-text--version" data-text="nlp · nlu · neuro-law">
+                NLP · NLU · NEURO-LAW
+              </span>
+              <span class="text-slate-500">GigaChat · YandexGPT · Яндекс Нейроюрист</span>
+            </div>
+          </div>
+
+          <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-[10px] text-slate-400">
+            <div class="flex flex-col gap-0.5">
+              <span class="uppercase tracking-[0.16em] text-slate-500">Artifacts</span>
+              <span class="crypto-text--value text-[11px] text-slate-200">audio · video · img · msgs</span>
+            </div>
+            <div class="flex flex-col gap-0.5">
+              <span class="uppercase tracking-[0.16em] text-slate-500">Pipelines</span>
+              <span class="crypto-text--value text-[11px] text-slate-200">NLP · NLU · spectral</span>
+            </div>
+            <div class="flex flex-col gap-0.5">
+              <span class="uppercase tracking-[0.16em] text-slate-500">Law</span>
+              <span class="crypto-text--value text-[11px] text-slate-200">Neuro-lawyer · mapping</span>
+            </div>
+            <div class="flex flex-col gap-0.5">
+              <span class="uppercase tracking-[0.16em] text-slate-500">Status</span>
+              <span class="crypto-text--value text-[11px] text-emerald-300">active · auto-analysis</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- STORY TIMELINE -->
+        <section class="rounded-2xl border border-slate-700/60 bg-slate-950/80 shadow-lg px-5 py-4 flex flex-col gap-3">
+          <div class="flex items-center justify-between gap-2">
+            <div class="text-[10px] uppercase tracking-[0.16em] text-slate-400">
+              Storyline · Git timeline
+            </div>
+            <div id="timelineMeta" class="text-[9px] uppercase tracking-[0.16em] text-slate-500"></div>
+          </div>
+
+          <div class="mt-1">
+            <div class="relative h-[2px] w-full bg-slate-800/80 overflow-hidden rounded-full">
+              <div
+                id="timelineProgress"
+                class="absolute inset-y-0 left-0 w-0 bg-gradient-to-r from-emerald-400 via-cyan-400 to-sky-500
+                  shadow-[0_0_8px_rgba(56,189,248,0.6)]"
+              ></div>
+            </div>
+
+            <div id="timelineNodes" class="mt-3 flex justify-between gap-2"></div>
+          </div>
+
+          <div
+            id="timelineDetail"
+            class="mt-2 text-[11px] leading-relaxed text-slate-300"
+          ></div>
+        </section>
+      </div>
+
+      <!-- фоновые полосы эквалайзера -->
+      <div
+        id="eegTracks"
+        class="pointer-events-none absolute top-16 bottom-16 left-[10.375rem] right-40 flex flex-col justify-between motion-layer eq-paused motion-off"
+      ></div>
+    </div>
+
+    <script>
+      (function () {
+        const gridStep = 110;
+        const dotOffset = gridStep / 2;
+        const dotColors = [
+          'rgba(34, 197, 94, 0.95)',
+          'rgba(239, 68, 68, 0.95)',
+          'rgba(59, 130, 246, 0.95)',
+          'rgba(15, 23, 42, 0.95)',
+          'rgba(234, 179, 8, 0.95)'
+        ];
+
+        function populateDots() {
+          const container = document.getElementById('gridGlow');
+          if (!container) return;
+
+          container.innerHTML = '';
+          const rect = container.getBoundingClientRect();
+          const cols = Math.ceil(rect.width / gridStep);
+          const rows = Math.ceil(rect.height / gridStep);
+
+          for (let y = 0; y <= rows; y++) {
+            for (let x = 0; x <= cols; x++) {
+              const dot = document.createElement('span');
+              dot.className = 'grid-dot';
+
+              const color = dotColors[Math.floor(Math.random() * dotColors.length)];
+              dot.style.setProperty('--dot-color', color);
+
+              dot.style.left = x * gridStep + dotOffset + 'px';
+              dot.style.top = y * gridStep + dotOffset + 'px';
+
+              dot.style.setProperty('--delay', (Math.random() * 4).toFixed(2) + 's');
+              dot.style.animationDuration = (2.4 + Math.random() * 2.8).toFixed(2) + 's';
+
+              container.appendChild(dot);
+            }
+          }
+        }
+
+        function createEEGStripes() {
+          const panel = document.getElementById('eegTracks');
+          if (!panel) return;
+
+          panel.innerHTML = '';
+          const lanes = 11;
+          const barsPerRow = 16;
+
+          for (let i = 0; i < lanes; i++) {
+            const row = document.createElement('div');
+            row.className = 'eeg-strip';
+
+            const rowDelay = (Math.random() * 3.2).toFixed(2) + 's';
+            row.style.setProperty('--rowDelay', rowDelay);
+
+            for (let j = 0; j < barsPerRow; j++) {
+              const bar = document.createElement('span');
+              bar.className = 'eq-bar';
+
+              const delay = (Math.random() * 1.4 + i * 0.07 + j * 0.03).toFixed(2) + 's';
+              const duration = (1.6 + Math.random() * 1.2).toFixed(2) + 's';
+              bar.style.setProperty('--delay', delay);
+              bar.style.setProperty('--duration', duration);
+
+              row.appendChild(bar);
+            }
+
+            panel.appendChild(row);
+          }
+        }
+
+        // ====== Генератор ID дела ======
+        function generateCaseId() {
+          const part = () =>
+            Math.floor(Math.random() * 0xffff)
+              .toString(16)
+              .padStart(4, '0')
+              .toUpperCase();
+          return part() + '-' + part();
+        }
+
+        function injectCaseId() {
+          const id = generateCaseId();
+          const full = 'Дело № ' + id;
+
+          const repoTitle = document.getElementById('repoTitle');
+          if (repoTitle) {
+            repoTitle.textContent = full;
+            repoTitle.setAttribute('data-text', full);
+          }
+
+          const caseTargets = document.querySelectorAll('[data-case-id-target]');
+          caseTargets.forEach((el) => {
+            el.textContent = full;
+            el.setAttribute('data-text', full);
+          });
+        }
+
+        // Crypto-анимация
+        function playCryptoOnce() {
+          const glyphs = '01/#@$%&*+=-';
+          const nodes = document.querySelectorAll('.crypto-text');
+          if (!nodes || !nodes.length) return;
+
+          if (window.__cryptoTimers && Array.isArray(window.__cryptoTimers)) {
+            window.__cryptoTimers.forEach((id) => clearInterval(id));
+          }
+          window.__cryptoTimers = [];
+
+          nodes.forEach((node, index) => {
+            const raw = node.getAttribute('data-text') || node.textContent || '';
+            const target = raw.trim();
+            if (!target) return;
+
+            let frame = 0;
+            const cycle = 40 + index * 6 + target.length * 2;
+
+            const timerId = setInterval(() => {
+              frame++;
+              const progress = frame / cycle;
+              let out = '';
+
+              for (let i = 0; i < target.length; i++) {
+                const threshold = ((i + 1) / target.length) * 0.85;
+                if (progress > threshold) {
+                  out += target[i];
+                } else {
+                  out += glyphs[Math.floor(Math.random() * glyphs.length)];
+                }
+              }
+
+              node.textContent = out;
+
+              if (frame >= cycle) {
+                clearInterval(timerId);
+                node.textContent = target;
+              }
+            }, 45 + index * 3);
+
+            window.__cryptoTimers.push(timerId);
+          });
+        }
+
+        // ====== Таймлайн ======
+        const storySteps = [
+          {
+            label: 'T+00:00',
+            title: 'Инициализация дела',
+            summary:
+              'Создан GitVerse-репозиторий и зафиксирован первый снапшот контекста: кто, где, какие сигналы и жалобы запускают расследование.'
+          },
+          {
+            label: 'T+03:12',
+            title: 'Импорт сырых артефактов',
+            summary:
+              'Выгружены записи, логи и первичные материалы. Каждый файл в evidence.json мапится на конкретный источник: устройство, локацию, свидетеля.'
+          },
+          {
+            label: 'T+07:45',
+            title: 'Спектральная реконструкция',
+            summary:
+              'Аудио и радиодиапазоны проходят через форензик-конвейер. Появляются первые коммиты с раскрашенными спектрограммами и временными метками.'
+          },
+          {
+            label: 'T+11:20',
+            title: 'Версионирование гипотез',
+            summary:
+              'Каждая версия расследовательской гипотезы — отдельная ветка GitVerse. Таймлайн раздваивается: техническая и юридическая трактовки событий.'
+          },
+          {
+            label: 'T+16:54',
+            title: 'Сборка нарратива',
+            summary:
+              'Технические данные, свидетельства и правовая квалификация собираются в единую историю. README.md становится понятным человеком сценарием дела.'
+          }
+        ];
+
+        let currentStepIndex = 0;
+        let timelineTimer = null;
+
+        function renderTimelineStep(index) {
+          const detail = document.getElementById('timelineDetail');
+          const meta = document.getElementById('timelineMeta');
+          const progressBar = document.getElementById('timelineProgress');
+          const nodes = document.querySelectorAll('#timelineNodes .timeline-node');
+
+          if (!detail || !progressBar || !nodes.length) return;
+
+          const step = storySteps[index];
+
+          nodes.forEach((node, i) => {
+            if (i === index) node.classList.add('timeline-node-active');
+            else node.classList.remove('timeline-node-active');
+          });
+
+          const ratio = storySteps.length > 1 ? index / (storySteps.length - 1) : 1;
+          progressBar.style.width = (ratio * 100).toFixed(1) + '%';
+
+          detail.innerHTML =
+            '<div class="mb-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">Story beat ' +
+            (index + 1) +
+            ' / ' +
+            storySteps.length +
+            '</div>' +
+            '<div class="mb-1 text-xs font-semibold text-slate-100">' +
+            step.title +
+            '</div>' +
+            '<p class="text-[11px] leading-relaxed text-slate-300">' +
+            step.summary +
+            '</p>';
+
+          if (meta) {
+            meta.textContent = step.label + ' · commit ' + (index + 1).toString().padStart(2, '0');
+          }
+        }
+
+        function startTimelineAuto() {
+          if (timelineTimer) clearInterval(timelineTimer);
+          timelineTimer = setInterval(() => {
+            currentStepIndex = (currentStepIndex + 1) % storySteps.length;
+            renderTimelineStep(currentStepIndex);
+          }, 4200);
+        }
+
+        function initTimeline() {
+          const nodesContainer = document.getElementById('timelineNodes');
+          if (!nodesContainer) return;
+
+          nodesContainer.innerHTML = '';
+
+          storySteps.forEach((step, idx) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'timeline-node flex-1 focus:outline-none';
+            btn.dataset.index = String(idx);
+            btn.innerHTML = '<span class="whitespace-nowrap">' + step.label + '</span>';
+
+            btn.addEventListener('click', () => {
+              currentStepIndex = idx;
+              renderTimelineStep(currentStepIndex);
+              startTimelineAuto();
+            });
+
+            nodesContainer.appendChild(btn);
+          });
+
+          currentStepIndex = 0;
+          renderTimelineStep(currentStepIndex);
+          startTimelineAuto();
+        }
+
+        // init
+        function init() {
+          populateDots();
+          createEEGStripes();
+          injectCaseId();
+          playCryptoOnce();
+          initTimeline();
+        }
+
+        window.addEventListener('load', init);
+        window.addEventListener('resize', () => {
+          populateDots();
+          createEEGStripes();
+        });
+
+        // LED toggle
+        const toggle = document.getElementById('blinkToggle');
+        const grid = document.getElementById('gridGlow');
+        const eqTracks = document.getElementById('eegTracks');
+        let motionOn = false;
+
+        if (toggle && grid) {
+          toggle.addEventListener('click', () => {
+            motionOn = !motionOn;
+
+            if (motionOn) {
+              grid.classList.remove('dots-paused', 'motion-off');
+              if (eqTracks) eqTracks.classList.remove('eq-paused', 'motion-off');
+
+              toggle.classList.remove('led-off');
+              toggle.classList.add('led-on');
+            } else {
+              grid.classList.add('motion-off');
+              if (eqTracks) eqTracks.classList.add('motion-off');
+
+              toggle.classList.remove('led-on');
+              toggle.classList.add('led-off');
+
+              setTimeout(() => {
+                grid.classList.add('dots-paused');
+                if (eqTracks) eqTracks.classList.add('eq-paused');
+              }, 600);
+            }
+          });
+        }
+
+        // hero клик — новое дело + заново crypto-анимация
+        const hero = document.getElementById('heroPanel');
+        if (hero) {
+          hero.addEventListener('click', () => {
+            injectCaseId();
+            playCryptoOnce();
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
